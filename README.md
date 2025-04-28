@@ -134,3 +134,129 @@ The inverted match logic was tricky because it required negating the match condi
 
 ### Bonus:
 The script already includes `--help` support and could be easily upgraded to use `getopts` for more robust option parsing.
+
+
+______________________________________________________________________________________________________________________________________
+Q2 : Answer
+
+
+
+### **Step 1: Verify DNS Resolution**
+#### **1. Check current DNS servers**  
+```bash
+cat /etc/resolv.conf
+```
+
+
+![1](https://github.com/user-attachments/assets/d687dcbc-2f9a-45e7-8f8d-edecccd44d62)
+
+
+#### **2. Test DNS resolution**  
+```bash
+nslookup internal.example.com          # Using local DNS
+nslookup internal.example.com 8.8.8.8  # Using Google DNS
+```
+
+![2](https://github.com/user-attachments/assets/ab45f343-d6da-44e3-9be9-fcf469cb8eac)
+
+---
+
+### **Step 2: Diagnose Service Reachability**
+#### **1. Get the IP address**  
+```bash
+dig +short internal.example.com
+# Or use the IP directly if known (e.g., 192.168.1.100)
+IP=192.168.1.100  # Replace with actual IP
+```
+Show blank as unresolved  
+![3](https://github.com/user-attachments/assets/e2d06980-d135-4df6-be76-7921b8d8bc29)
+
+
+#### **2. Test HTTP/HTTPS connectivity**  
+```bash
+curl -v http://$IP              # Check HTTP (port 80)
+curl -vk https://$IP            # Check HTTPS (port 443, ignore cert errors)
+telnet $IP 80                   # Test raw TCP connection
+```
+output example:  
+- `curl: (7) Failed to connect` → Network/firewall issue.  
+- `HTTP/1.1 200 OK` → Service is reachable.  
+
+#### **3. Check if the service is running locally**  
+```bash
+sudo ss -tulnp | grep -E ':80|:443'  # Modern alternative to netstat
+```
+output example:  
+- Empty output → Service not running.  
+- `nginx/apache2` listed → Service is up but may be blocked.  
+
+---
+
+### **Step 3: Trace the Issue (Common Causes & Fixes)**
+#### **1. DNS Misconfiguration**  
+**Confirm**:  
+```bash
+ping internal.example.com  # Fails if DNS is broken
+```  
+**Fix**:  
+```bash
+# Temporary fix (edit resolv.conf)
+echo "nameserver 192.168.1.1" | sudo tee /etc/resolv.conf
+```  
+
+
+#### **2. Firewall Blocking**  
+**Confirm**:  
+```bash
+sudo ufw status  # Check if UFW is active
+iptables -L -n   # Check for blocked ports
+```  
+**Fix**:  
+```bash
+sudo ufw allow 80/tcp   # Allow HTTP
+sudo ufw allow 443/tcp  # Allow HTTPS
+```  
+ 
+
+#### **3. Service Not Running**  
+**Confirm**:  
+```bash
+systemctl status apache2  # Or nginx
+```  
+**Fix**:  
+```bash
+sudo systemctl start apache2
+```  
+
+
+#### **4. /etc/hosts Override (Bonus)**  
+**Add a manual entry**:  
+```bash
+echo "192.168.1.100 internal.example.com" | sudo tee -a /etc/hosts
+```  
+**Verify**:  
+```bash
+ping -c 2 internal.example.com
+```  
+
+---
+
+### **Step 4: Persist DNS Settings (Bonus)**  
+#### **Using `systemd-resolved` (Ubuntu default)**:  
+```bash
+sudo systemctl restart systemd-resolved
+sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+```  
+ 
+
+#### **Using `NetworkManager` (GUI)**:  
+```bash
+nmcli con show | grep -i ethernet  # Find connection name
+nmcli con mod "Wired Connection 1" ipv4.dns "192.168.1.1"
+nmcli con up "Wired Connection 1"
+```  
+
+
+
+
+
